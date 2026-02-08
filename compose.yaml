@@ -1,0 +1,14 @@
+services:
+  cassandra:
+    image: 'cassandra:latest'
+    environment:
+      - 'CASSANDRA_DC=dc1'
+      - 'CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch'
+    ports:
+      - '9042'
+  oracle:
+    image: 'gvenzl/oracle-free:latest'
+    environment:
+      - 'ORACLE_PASSWORD=secret'
+    ports:
+      - '1521'

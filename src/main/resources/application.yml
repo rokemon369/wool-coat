@@ -1,0 +1,110 @@
+
+
+# Spring 配置
+spring:
+  # 数据库配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/wool_coat_agent?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8
+    username: root # 你的 MySQL 用户名
+    password: 123456 # 你的 MySQL 密码
+  # Redis 配置（会话缓存、限流）
+  redis:
+    host: localhost
+    port: 6379
+    password: '' # 你的 Redis 密码（无则留空）
+    database: 0
+    jedis:
+      pool:
+        max-active: 10
+        max-idle: 5
+        min-idle: 1
+  # 异步配置
+  task:
+    execution:
+      pool:
+        core-size: 5
+        max-size: 20
+        queue-capacity: 100
+  server:
+    port: 8080
+    tomcat:
+      max-threads: 200
+      min-spare-threads: 20
+
+
+# MyBatis-Plus 配置
+mybatis-plus:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.woolcoat.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+# LLM 配置（支持自动降级）
+llm:
+  type: dashscope # 默认在线模型：dashscope / ollama
+  fallback-switch: true # 开启自动降级（在线模型失败时切换到 ollama）
+  dashscope:
+    api-key: sk-04ea73a319fb47448586c509b2db8530
+    model: qwen-turbo
+    timeout: 30000 # 30秒超时
+    max-token: 4096 # 最大 Token 限制
+  ollama:
+    base-url: http://localhost:11434/api
+    model: qwen2:7b
+    timeout: 60000 # 本地模型超时稍长（60秒）
+    max-token: 8192
+
+# RAG 配置（Lucene 本地索引）
+rag:
+  lucene:
+    index-path: D:/dev/wool-coat/rag-index # 索引存储路径（非中文、无空格）
+  document:
+    allowed-suffix: md,txt,pdf # 支持的文档格式
+    chunk-size: 500 # 文档分片大小（每个分片 500 字）
+    chunk-overlap: 50 # 分片重叠字数（保证上下文连贯）
+  search:
+    top-k: 10 # 检索返回前 10 条结果
+
+# Resilience4j 熔断重试配置（升级，支持 LLM 降级）
+resilience4j:
+  retry:
+    instances:
+      llmRetry:
+        max-attempts: 3
+        wait-duration: 1s
+        enable-exponential-backoff: true # 指数退避（重试间隔递增）
+        exponential-backoff-multiplier: 2
+  circuitbreaker:
+    instances:
+      llmCircuitBreaker:
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        sliding-window-size: 10
+        permitted-number-of-calls-in-half-open-state: 5
+
+# Knife4j 接口文档配置
+knife4j:
+  enable: true
+  openapi:
+    title: 个人智能任务助理 Agent API 文档
+    description: 个人智能任务助理 Agent（RAG + 工具调用 + 多步规划）
+    version: 1.0.0
+    contact:
+      name: 开发者
+      email: developer@example.com
+
+# ========== Agent核心层配置 ==========
+agent:
+  # 工具相关配置
+  tool:
+    markdown:
+      # Markdown导出路径，不存在则自动创建
+      export-path: ./agent-export/markdown/
+# ========== 日志配置（可选，方便调试） ==========
+logging:
+  level:
+    com.woolcoat.agent: INFO
+    com.woolcoat.function: INFO
+    com.woolcoat.plan: INFO
