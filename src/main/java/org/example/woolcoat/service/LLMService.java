@@ -32,6 +32,15 @@ public class LLMService {
     }
 
     /**
+     * 流式调用 LLM（不经过熔断/重试，避免流式语义复杂）
+     * @param request LLM 请求参数
+     * @param onChunk 每段内容的回调
+     */
+    public void callLLMStream(LLMRequest request, java.util.function.Consumer<String> onChunk) {
+        llmClient.chatStream(request, onChunk);
+    }
+
+    /**
      * 降级方法：当 LLM 调用失败（超时/熔断）时，返回兜底响应
      */
     public LLMResponse llmFallback(LLMRequest request, Exception e) {

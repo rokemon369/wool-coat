@@ -1,0 +1,6 @@
+# 测试环境配置（@ActiveProfiles("test")）
+llm:
+  fallback-switch: false   # 关闭降级，便于 Mock 单一 LLMClient
+woolcoat:
+  auth:
+    enabled: false         # 测试关闭鉴权

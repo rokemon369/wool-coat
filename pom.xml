@@ -20,7 +20,6 @@
         <mysql-connector.version>8.0.33</mysql-connector.version>
         <jedis.version>4.4.6</jedis.version>
         <hutool.version>5.8.30</hutool.version>
-        <fastjson.version>1.2.83</fastjson.version>
         <lucene.version>8.11.2</lucene.version>
         <spring-boot.version>3.1.9</spring-boot.version>
         <knife4j.version>4.4.0</knife4j.version>
@@ -31,17 +30,6 @@
             <id>aliyunmaven</id>
             <name>阿里云公共仓库</name>
             <url>https://maven.aliyun.com/repository/public</url>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>false</enabled>
-            </snapshots>
-        </repository>
-        <repository>
-            <id>jcenter</id>
-            <name>JCenter Repository</name>
-            <url>https://jcenter.bintray.com/</url>
             <releases>
                 <enabled>true</enabled>
             </releases>
@@ -101,12 +89,6 @@
             <artifactId>hutool-all</artifactId>
             <version>${hutool.version}</version>
         </dependency>
-        <dependency>
-            <groupId>com.alibaba</groupId>
-            <artifactId>fastjson</artifactId>
-            <version>${fastjson.version}</version>
-        </dependency>
-
         <!-- RAG核心 -->
         <dependency>
             <groupId>org.apache.lucene</groupId>
@@ -141,6 +123,12 @@
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
             <scope>test</scope>
+        </dependency>
+
+        <!-- 生产环境推荐：Actuator 健康检查与基础监控 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
         <!-- 通义千问 SDK（在线LLM） -->

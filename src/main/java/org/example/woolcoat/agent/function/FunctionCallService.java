@@ -3,6 +3,7 @@ package org.example.woolcoat.agent.function;
 import cn.hutool.json.JSONUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.example.woolcoat.agent.reflection.ReflectionService;
 import org.example.woolcoat.exceptions.BusinessException;
 import org.example.woolcoat.service.LLMService;
 import org.example.woolcoat.vo.common.Message;
@@ -25,9 +26,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class FunctionCallService {
 
-    // 注入依赖：工具注册中心+基础层LLMService
+    // 注入依赖：工具注册中心 + LLM + 反思纠错
     private final ToolRegistry toolRegistry;
     private final LLMService llmService;
+    private final ReflectionService reflectionService;
 
     /**
      * 核心方法：执行工具调用
@@ -80,14 +82,39 @@ public class FunctionCallService {
             throw new BusinessException("工具调用失败：不存在该工具，toolCode=" + toolCode + "，可用工具=" + toolRegistry.getToolMap().keySet());
         }
 
-        // 步骤6：调用工具执行方法
-        Map<String, Object> paramMap = toolCallResult.getParam_map();
+        // 步骤6：调用工具执行方法（失败时联动反思纠错）
+        Map<String, Object> paramMap = toolCallResult.getParam_map() != null ? toolCallResult.getParam_map() : Map.of();
         log.info("工具调用：开始执行工具，sessionId={}，toolCode={}，paramMap={}", sessionId, toolCode, paramMap);
-        String toolExecuteResult = tool.execute(paramMap);
+        String toolExecuteResult;
+        try {
+            toolExecuteResult = tool.execute(paramMap);
+        } catch (Exception e) {
+            log.warn("工具执行失败，触发反思纠错，sessionId={}，toolCode={}，原因={}", sessionId, toolCode, e.getMessage());
+            return reflectionService.reflectAndRetry(userQuery, toolCode, paramMap, e.getMessage(), sessionId);
+        }
         log.info("工具调用：工具执行成功，sessionId={}，toolCode={}", sessionId, toolCode);
 
         // 步骤7：封装结果返回
         return "【工具调用成功】\n工具名称：" + tool.getToolMeta().getToolName() + "（" + toolCode + "）\n执行结果：\n" + toolExecuteResult;
+    }
+
+    /**
+     * 直接执行工具（已知 toolCode、paramMap），失败时联动反思纠错，供 TaskPlanService 等多步场景复用
+     */
+    public String executeToolWithReflection(String toolCode, Map<String, Object> paramMap, String userQuery, String sessionId) throws Exception {
+        AgentTool tool = toolRegistry.getToolByCode(toolCode);
+        if (tool == null) {
+            throw new BusinessException("不存在该工具，toolCode=" + toolCode);
+        }
+        Map<String, Object> safeParamMap = paramMap != null ? paramMap : Map.of();
+        log.info("直接执行工具（含反思纠错），sessionId={}，toolCode={}", sessionId, toolCode);
+        try {
+            String result = tool.execute(safeParamMap);
+            return "【工具调用成功】\n工具名称：" + tool.getToolMeta().getToolName() + "（" + toolCode + "）\n执行结果：\n" + result;
+        } catch (Exception e) {
+            log.warn("工具执行失败，触发反思纠错，sessionId={}，toolCode={}，原因={}", sessionId, toolCode, e.getMessage());
+            return reflectionService.reflectAndRetry(userQuery, toolCode, safeParamMap, e.getMessage(), sessionId);
+        }
     }
 
     /**

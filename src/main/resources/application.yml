@@ -2,18 +2,18 @@
 
 # Spring 配置
 spring:
-  # 数据库配置
+  # 数据库配置（支持通过环境变量覆盖，方便上线）
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/wool_coat_agent?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8
-    username: root # 你的 MySQL 用户名
-    password: 123456 # 你的 MySQL 密码
+    url: ${DB_URL:jdbc:mysql://localhost:3306/wool_coat_agent?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8}
+    username: ${DB_USERNAME:root} # 生产环境建议通过环境变量传入
+    password: ${DB_PASSWORD:123456} # 生产环境不要写死到配置文件
   # Redis 配置（会话缓存、限流）
   redis:
-    host: localhost
-    port: 6379
-    password: '' # 你的 Redis 密码（无则留空）
-    database: 0
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:} # 你的 Redis 密码（无则留空）
+    database: ${REDIS_DATABASE:0}
     jedis:
       pool:
         max-active: 10
@@ -27,39 +27,45 @@ spring:
         max-size: 20
         queue-capacity: 100
   server:
-    port: 8080
+    port: ${SERVER_PORT:8080}
     tomcat:
       max-threads: 200
       min-spare-threads: 20
+  # 文件上传限制（与 GlobalExceptionHandler 中的 10MB 提示一致）
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
 
-
-# MyBatis-Plus 配置
+# MyBatis-Plus 配置（生产环境用 application-prod.yml 覆盖 log-impl 为 slf4j）
 mybatis-plus:
   mapper-locations: classpath:mapper/*.xml
-  type-aliases-package: com.woolcoat.entity
+  type-aliases-package: org.example.woolcoat.entity
   configuration:
     map-underscore-to-camel-case: true
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
 # LLM 配置（支持自动降级）
 llm:
-  type: dashscope # 默认在线模型：dashscope / ollama
+  type: ${LLM_TYPE:dashscope} # 默认在线模型：dashscope / ollama
   fallback-switch: true # 开启自动降级（在线模型失败时切换到 ollama）
   dashscope:
-    api-key: sk-04ea73a319fb47448586c509b2db8530
-    model: qwen-turbo
-    timeout: 30000 # 30秒超时
-    max-token: 4096 # 最大 Token 限制
+    # 生产/正式环境务必通过环境变量 LLM_DASHSCOPE_API_KEY 注入，本地开发可建 application-local.yml 覆盖
+    api-key: ${LLM_DASHSCOPE_API_KEY:}
+    model: ${LLM_DASHSCOPE_MODEL:qwen-turbo}
+    timeout: ${LLM_DASHSCOPE_TIMEOUT:30000} # 30秒超时
+    max-token: ${LLM_DASHSCOPE_MAX_TOKEN:4096} # 最大 Token 限制
   ollama:
-    base-url: http://localhost:11434/api
-    model: qwen2:7b
-    timeout: 60000 # 本地模型超时稍长（60秒）
-    max-token: 8192
+    base-url: ${LLM_OLLAMA_BASE_URL:http://localhost:11434/api}
+    model: ${LLM_OLLAMA_MODEL:qwen2:7b}
+    timeout: ${LLM_OLLAMA_TIMEOUT:60000} # 本地模型超时稍长（60秒）
+    max-token: ${LLM_OLLAMA_MAX_TOKEN:8192}
 
 # RAG 配置（Lucene 本地索引）
 rag:
   lucene:
-    index-path: D:/dev/wool-coat/rag-index # 索引存储路径（非中文、无空格）
+    # 索引存储路径建议配置到非系统盘，生产环境可通过 RAG_INDEX_PATH 覆盖
+    index-path: ${RAG_INDEX_PATH:D:/dev/wool-coat/rag-index}
   document:
     allowed-suffix: md,txt,pdf # 支持的文档格式
     chunk-size: 500 # 文档分片大小（每个分片 500 字）
@@ -95,6 +101,16 @@ knife4j:
       name: 开发者
       email: developer@example.com
 
+# ========== 鉴权配置 ==========
+woolcoat:
+  auth:
+    enabled: ${AUTH_ENABLED:false}       # 生产环境建议设为 true
+    api-key: ${AUTH_API_KEY:}           # Token，请求头：Authorization: Bearer <token> 或 X-API-Key: <token>
+    exclude-paths:                      # 无需鉴权路径
+      - /actuator/health
+      - /actuator/info
+      - /error
+
 # ========== Agent核心层配置 ==========
 agent:
   # 工具相关配置
@@ -105,6 +121,17 @@ agent:
 # ========== 日志配置（可选，方便调试） ==========
 logging:
   level:
-    com.woolcoat.agent: INFO
-    com.woolcoat.function: INFO
-    com.woolcoat.plan: INFO
+    # 调整为真实包路径，生产环境默认 INFO
+    org.example.woolcoat: INFO
+  file:
+    name: ${LOG_FILE:logs/wool-coat.log}
+
+# Actuator 管理与健康检查配置（上线后可用 /actuator/health、/actuator/info）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when_authorized

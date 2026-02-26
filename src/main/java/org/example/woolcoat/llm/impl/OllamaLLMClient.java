@@ -7,24 +7,30 @@ import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 import org.example.woolcoat.llm.LLMClient;
 import org.example.woolcoat.vo.request.LLMRequest;
 import org.example.woolcoat.vo.response.LLMResponse;
 import org.example.woolcoat.vo.common.Message;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.stereotype.Component;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * Ollama 本地 LLM 客户端（离线模型，兜底使用）
  * 当 llm.type=ollama 时，该Bean生效（适配项目 wool-coat）
  */
 @Slf4j
-@Component
-@ConditionalOnProperty(name = "llm.type", havingValue = "ollama")
+@Component("ollamaLLMClient")
+@ConditionalOnExpression("'${llm.type:ollama}'=='ollama' || '${llm.fallback-switch:false}'=='true'")
 public class OllamaLLMClient implements LLMClient {
 
     private static final Gson GSON = new Gson();
@@ -56,7 +62,7 @@ public class OllamaLLMClient implements LLMClient {
             OllamaRequest ollamaRequest = new OllamaRequest();
             ollamaRequest.setModel(model);
             ollamaRequest.setMessages(convertToOllamaMessages(request.getMessages()));
-            ollamaRequest.setStream(false); // 关闭流式响应，简化处理
+            ollamaRequest.setStream(false);
             ollamaRequest.setTemperature(request.getTemperature());
 
             // 2. 构建 HTTP POST 请求
@@ -93,6 +99,46 @@ public class OllamaLLMClient implements LLMClient {
         return response;
     }
 
+    @Override
+    public void chatStream(LLMRequest request, Consumer<String> onChunk) {
+        try {
+            OllamaRequest ollamaRequest = new OllamaRequest();
+            ollamaRequest.setModel(model);
+            ollamaRequest.setMessages(convertToOllamaMessages(request.getMessages()));
+            ollamaRequest.setStream(true);
+            ollamaRequest.setTemperature(request.getTemperature());
+
+            String requestJson = GSON.toJson(ollamaRequest);
+            RequestBody requestBody = RequestBody.create(requestJson, JSON_MEDIA_TYPE);
+            Request httpRequest = new Request.Builder()
+                    .url(baseUrl + "/chat")
+                    .post(requestBody)
+                    .build();
+
+            try (Response httpResponse = okHttpClient.newCall(httpRequest).execute();
+                 ResponseBody body = httpResponse.body()) {
+                if (!httpResponse.isSuccessful() || body == null) {
+                    throw new RuntimeException("Ollama 流式调用失败，响应码：" + (httpResponse.code()));
+                }
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(body.byteStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (line.isBlank()) continue;
+                        OllamaStreamChunk chunk = GSON.fromJson(line, OllamaStreamChunk.class);
+                        if (chunk != null && chunk.getMessage() != null && chunk.getMessage().getContent() != null) {
+                            onChunk.accept(chunk.getMessage().getContent());
+                        }
+                        if (chunk != null && chunk.getDone()) break;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Ollama 流式调用异常：", e);
+            throw new RuntimeException("Ollama 流式异常：" + e.getMessage());
+        }
+    }
+
     // 转换消息格式：项目自定义 Message → Ollama 所需消息格式
     private List<OllamaMessage> convertToOllamaMessages(List<Message> messages) {
         return messages.stream()
@@ -124,5 +170,12 @@ public class OllamaLLMClient implements LLMClient {
     static class OllamaResponse {
         private OllamaMessage message;
         private boolean done;
+    }
+
+    /** 流式响应每行 JSON */
+    @Data
+    static class OllamaStreamChunk {
+        private OllamaMessage message;
+        private Boolean done;
     }
 }

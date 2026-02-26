@@ -1,0 +1,107 @@
+# wool-coat 应用：内网 MySQL/Redis 使用 192.168.1.4，端口与 application.yml 一致（3306 / 6379）
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wool-coat
+  labels:
+    app: wool-coat
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: wool-coat
+  template:
+    metadata:
+      labels:
+        app: wool-coat
+    spec:
+      containers:
+        - name: wool-coat
+          image: wool-coat:0.0.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "prod"
+            - name: SERVER_PORT
+              value: "8080"
+            # 鉴权（生产开启，Token 放 Secret）
+            - name: AUTH_ENABLED
+              value: "true"
+            - name: AUTH_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wool-coat-secrets
+                  key: auth-api-key
+            # 内网 MySQL：192.168.1.4:3306（与配置文件一致）
+            - name: DB_URL
+              value: "jdbc:mysql://192.168.1.4:3306/wool_coat_agent?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8"
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: wool-coat-secrets
+                  key: db-username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: wool-coat-secrets
+                  key: db-password
+            # 内网 Redis：192.168.1.4:6379（与配置文件一致）
+            - name: REDIS_HOST
+              value: "192.168.1.4"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: wool-coat-secrets
+                  key: redis-password
+            - name: REDIS_DATABASE
+              value: "0"
+            # LLM（DashScope 密钥放 Secret）
+            - name: LLM_TYPE
+              value: "dashscope"
+            - name: LLM_DASHSCOPE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wool-coat-secrets
+                  key: dashscope-api-key
+            # RAG 索引与日志（可挂 PVC 持久化）
+            - name: RAG_INDEX_PATH
+              value: "/data/rag-index"
+            - name: LOG_FILE
+              value: "/data/logs/wool-coat.log"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wool-coat
+  labels:
+    app: wool-coat
+spec:
+  type: ClusterIP
+  selector:
+    app: wool-coat
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080

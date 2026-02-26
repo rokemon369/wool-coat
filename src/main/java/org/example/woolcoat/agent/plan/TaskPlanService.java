@@ -133,20 +133,13 @@ public class TaskPlanService {
             if (stepIndex == null || toolCode == null || toolCode.isBlank()) {
                 throw new BusinessException("步骤" + stepIndex + "信息非法：缺少stepIndex或toolCode");
             }
-            if (toolRegistry.getToolByCode(toolCode) == null) {
-                throw new BusinessException("步骤" + stepIndex + "执行失败：不存在该工具，toolCode=" + toolCode);
-            }
 
-            // 调用工具执行方法（复用FunctionCallService的工具执行逻辑）
-            try {
-                // 这里简化实现：直接调用工具的execute方法，后续可整合反思纠错
-                String stepResult = toolRegistry.getToolByCode(toolCode).execute(step.getParamMap());
-                step.setStepResult(stepResult);
-                step.setStepSuccess(true);
-                log.info("多步任务规划：步骤执行成功，taskId={}，stepIndex={}", task.getTaskId(), stepIndex);
-            } catch (Exception e) {
-                throw new BusinessException("步骤" + stepIndex + "执行失败：" + e.getMessage());
-            }
+            // 通过 FunctionCallService 执行（含反思纠错）
+            String stepResult = functionCallService.executeToolWithReflection(
+                    toolCode, step.getParamMap(), task.getUserQuery(), task.getSessionId());
+            step.setStepResult(stepResult);
+            step.setStepSuccess(true);
+            log.info("多步任务规划：步骤执行成功，taskId={}，stepIndex={}", task.getTaskId(), stepIndex);
         }
     }
 

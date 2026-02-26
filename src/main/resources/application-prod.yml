@@ -1,0 +1,28 @@
+# 生产环境配置（激活方式：--spring.profiles.active=prod）
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+# MyBatis 生产环境：SQL 日志输出到 slf4j，不占用 stdout
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+
+# Actuator 生产：健康检查详情仅授权时展示
+management:
+  endpoint:
+    health:
+      show-details: when_authorized
+
+# 鉴权：生产环境默认开启（可通过 AUTH_ENABLED=false 关闭）
+woolcoat:
+  auth:
+    enabled: ${AUTH_ENABLED:true}
+    api-key: ${AUTH_API_KEY:}
+
+# 日志级别
+logging:
+  level:
+    org.example.woolcoat: INFO
+    org.apache.ibatis: WARN

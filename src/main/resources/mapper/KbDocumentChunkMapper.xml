@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.woolcoat.mapper.KbDocumentChunkMapper">
+<mapper namespace="org.example.woolcoat.mapper.KbDocumentChunkMapper">
 
     <!-- 批量插入文档分片（字段名与数据库/实体类一致，无变更） -->
     <insert id="insertBatch" parameterType="java.util.List">
